@@ -6,7 +6,7 @@ import hashlib
 import base64
 import requests
 
-CF_HANDLE = "raghavSoniXE"
+CF_HANDLE = os.getenv("CF_HANDLE")
 
 ENGINE_REPO = "GitForces"
 ARCHIVE_REPO = "Codeforces-Solutions-Archive"
