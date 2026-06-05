@@ -7,23 +7,20 @@ import sys
 
 # Configuration Parameters
 CF_HANDLE = "raghavSoniXE"
-TARGET_REPO = "Code-Forces-Solutions-Archive"  # The repository where code will be saved
-STATE_FILE = "cf_sync_state.json"              # Tracking file kept inside Git-Forces
+TARGET_REPO = "Code-Forces-Solutions-Archive"
+STATE_FILE = "cf_sync_state.json"
 
 GITHUB_TOKEN = os.getenv("GH_PAT")
-# Automatically fetches your GitHub username from the Action environment
 GITHUB_ACTOR = os.getenv("GITHUB_ACTOR") 
 
 if not GITHUB_TOKEN or not GITHUB_ACTOR:
     print("Error: Missing internal security environment configuration variables.")
     sys.exit(1)
 
-# Full repository path references
-ENGINE_REPO_FULL = f"{GITHUB_ACTOR}/Git-Forces"
+ENGINE_REPO_FULL = f"{GITHUB_ACTOR}/GitForces"
 ARCHIVE_REPO_FULL = f"{GITHUB_ACTOR}/{TARGET_REPO}"
 
 def get_synced_submissions():
-    """Reads the state file from Git-Forces to see what has already been pushed."""
     url = f"https://api.github.com/repos/{ENGINE_REPO_FULL}/contents/{STATE_FILE}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     res = requests.get(url, headers=headers)
@@ -37,7 +34,6 @@ def get_synced_submissions():
     return set(), None
 
 def get_cf_submissions():
-    """Fetches the last 100 entries from Codeforces along with the source codes."""
     url = f"https://codeforces.com/api/user.status?handle={CF_HANDLE}&from=1&count=100&includeSources=true"
     try:
         response = requests.get(url).json()
@@ -50,7 +46,6 @@ def get_cf_submissions():
         return []
 
 def write_to_github(repo_full_name, path, content, message, sha=None):
-    """Pushes a file directly to a specified GitHub repository via API."""
     url = f"https://api.github.com/repos/{repo_full_name}/contents/{path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     content_base64 = base64.b64encode(content.encode("utf-8")).decode("utf-8")
@@ -84,7 +79,6 @@ def main():
     new_synced_ids = list(synced_ids)
     uploaded_any = False
 
-    # Process oldest to newest to ensure proper timeline commit ordering
     for sub in reversed(submissions):
         sub_id = str(sub["id"])
         
@@ -99,7 +93,6 @@ def main():
             
             print(f"Syncing new item to archive repo: {contest_id}{prob_index}...")
             
-            # Check if file exists in the Archive repository to get its SHA if updating
             url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
             file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
             file_sha = file_check.json().get("sha") if file_check.status_code == 200 else None
@@ -110,7 +103,6 @@ def main():
             else:
                 print(f"❌ Commit failure on file: {file_path}")
 
-    # If items were synchronized, record them in the Git-Forces tracking file
     if uploaded_any:
         print("Updating persistence registry state tracker inside Git-Forces...")
         state_data = json.dumps({"synced_ids": new_synced_ids}, indent=4)
