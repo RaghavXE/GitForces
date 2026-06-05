@@ -18,38 +18,14 @@ CF_SECRET = os.getenv("CF_SECRET")
 
 
 
-print("PAT EXISTS:", GH_PAT is not None)
 
 HEADERS = {
     "Authorization": f"token {GH_PAT}",
     "Accept": "application/vnd.github+json"
 }
 
-user = requests.get(
-    "https://api.github.com/user",
-    headers=HEADERS
-)
 
-print("USER CHECK:", user.status_code)
-print(user.text)
 
-repos = requests.get(
-    "https://api.github.com/user/repos?per_page=100&page=2",
-    headers=HEADERS
-)
-
-print("PAGE 2 STATUS:", repos.status_code)
-
-for repo in repos.json():
-    print(repo["full_name"])
-
-r = requests.get(
-    "https://api.github.com/repos/RaghavXE/GitForces",
-    headers=HEADERS
-)
-
-# print("GITFORCES:", r.status_code)
-# print(r.text)
 
 
 
@@ -58,16 +34,11 @@ r = requests.get(
     headers=HEADERS
 )
 
-# print("ARCHIVE:", r.status_code)
-# print(r.text)
-
 
 r = requests.get(
     "https://api.github.com/user/repos?per_page=100",
     headers=HEADERS
 )
-
-print("TOTAL REPOS:", len(r.json()))
 
 
 
