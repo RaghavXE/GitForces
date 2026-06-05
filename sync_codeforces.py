@@ -46,16 +46,18 @@ r = requests.get(
     headers=HEADERS
 )
 
-print("GITFORCES:", r.status_code)
-print(r.text)
+# print("GITFORCES:", r.status_code)
+# print(r.text)
+
+GITHUB_USER = os.getenv("GITHUB_USER")
 
 r = requests.get(
-    "https://api.github.com/repos/RaghavXE/Codeforces-Solutions-Archive",
+    f"https://api.github.com/repos/{GITHUB_USER}/{ARCHIVE_REPO}",
     headers=HEADERS
 )
 
-print("ARCHIVE:", r.status_code)
-print(r.text)
+# print("ARCHIVE:", r.status_code)
+# print(r.text)
 
 
 r = requests.get(
