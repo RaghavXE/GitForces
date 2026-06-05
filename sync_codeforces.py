@@ -7,18 +7,18 @@ import sys
 
 # Configuration Parameters
 CF_HANDLE = "raghavSoniXE"
-TARGET_REPO = "Codeforces-Solutions-Archive"  
-STATE_FILE = "cf_sync_state.json"             
+TARGET_REPO = "Code-Forces-Solutions-Archive"  # The repository where code will be saved
+STATE_FILE = "cf_sync_state.json"              # Tracking file kept inside Git-Forces
 
 GITHUB_TOKEN = os.getenv("GH_PAT")
-
+# Automatically fetches your GitHub username from the Action environment
 GITHUB_ACTOR = os.getenv("GITHUB_ACTOR") 
 
 if not GITHUB_TOKEN or not GITHUB_ACTOR:
     print("Error: Missing internal security environment configuration variables.")
     sys.exit(1)
 
-
+# Full repository path references
 ENGINE_REPO_FULL = f"{GITHUB_ACTOR}/Git-Forces"
 ARCHIVE_REPO_FULL = f"{GITHUB_ACTOR}/{TARGET_REPO}"
 
@@ -110,8 +110,8 @@ def main():
             else:
                 print(f"❌ Commit failure on file: {file_path}")
 
-
-  if uploaded_any:
+    # If items were synchronized, record them in the Git-Forces tracking file
+    if uploaded_any:
         print("Updating persistence registry state tracker inside Git-Forces...")
         state_data = json.dumps({"synced_ids": new_synced_ids}, indent=4)
         write_to_github(ENGINE_REPO_FULL, STATE_FILE, state_data, "🔄 Update sync state register [skip ci]", state_sha)
