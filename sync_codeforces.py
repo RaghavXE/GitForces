@@ -181,7 +181,7 @@ def get_state():
 def save_state(state):
     url = (
         f"https://api.github.com/repos/"
-        f"RaghavXE/{ENGINE_REPO}/contents/{STATE_FILE}"
+        f"{GITHUB_USER}/{ENGINE_REPO}/contents/{STATE_FILE}"
     )
 
     current = requests.get(
@@ -213,7 +213,7 @@ def save_state(state):
 def upload_file(path, content):
     url = (
         f"https://api.github.com/repos/"
-        f"RaghavXE/{ARCHIVE_REPO}/contents/{path}"
+        f"{GITHUB_USER}/{ARCHIVE_REPO}/contents/{path}"
     )
 
     payload = {
@@ -292,7 +292,7 @@ source = base64.b64decode(
 
 url = (
     f"https://api.github.com/repos/"
-    f"RaghavXE/{ARCHIVE_REPO}/contents/{filename}"
+    f"{GITHUB_USER}/{ARCHIVE_REPO}/contents/{filename}"
 )
 
 payload = {
