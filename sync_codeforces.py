@@ -12,14 +12,14 @@ CF_HANDLE = "raghavSoniXE"
 TARGET_REPO = "Codeforces-Solutions-Archive"
 STATE_FILE = "cf_sync_state.json"
 
-# Credentials Extraction
+# Extract secrets from the encrypted GitHub runner vault
 GITHUB_TOKEN = os.getenv("GH_PAT")
 GITHUB_ACTOR = os.getenv("GITHUB_ACTOR")
 CF_KEY = os.getenv("CF_KEY")
 CF_SECRET = os.getenv("CF_SECRET")
 
 if not all([GITHUB_TOKEN, GITHUB_ACTOR, CF_KEY, CF_SECRET]):
-    print("Error: Missing internal security credentials in environment variables.")
+    print("Security Validation Error: Missing internal secrets inside the runner container environment.")
     sys.exit(1)
 
 ENGINE_REPO_FULL = f"{GITHUB_ACTOR}/GitForces"
@@ -39,7 +39,7 @@ def get_synced_submissions():
     return set(), None
 
 def generate_api_sig(method_name, params):
-    """Generates an authorized SHA-512 signature required by Codeforces."""
+    """Generates the secure SHA-512 cryptographic signature required by Codeforces API."""
     rand_prefix = "123456"
     ordered_params = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
     signature_string = f"{rand_prefix}/{method_name}?{ordered_params}#{CF_SECRET}"
@@ -47,12 +47,12 @@ def generate_api_sig(method_name, params):
     return f"{rand_prefix}{hashed}"
 
 def get_cf_submissions():
-    """Fetches submission data with authenticated permissions."""
+    """Queries Codeforces user status securely, scanning up to 5000 historic records."""
     current_time = int(time.time())
     params = {
         "handle": CF_HANDLE,
         "from": "1",
-        "count": "100",
+        "count": "5000",  # Expanded from 100 to 5000 to catch full historic milestones
         "includeSources": "true",
         "apiKey": CF_KEY,
         "time": str(current_time)
@@ -65,11 +65,11 @@ def get_cf_submissions():
     try:
         response = requests.get(url, params=params).json()
         if response["status"] != "OK":
-            print(f"Codeforces Authentication Error: {response.get('comment')}")
+            print(f"Codeforces API rejected query: {response.get('comment')}")
             return []
         return response["result"]
     except Exception as e:
-        print(f"Secure connection failure to Codeforces API: {e}")
+        print(f"Network error querying Codeforces API: {e}")
         return []
 
 def write_to_github(repo_full_name, path, content, message, sha=None):
@@ -107,7 +107,7 @@ def process_single_submission(sub, synced_ids):
     file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
     commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
     
-    print(f"Syncing authenticated item to archive: {contest_id}{prob_index}...")
+    print(f"Processing target push: {contest_id}{prob_index}...")
     
     url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
     file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
@@ -117,12 +117,12 @@ def process_single_submission(sub, synced_ids):
     return success, sub_id
 
 def main():
-    print("Launching Secure Git-Forces Integration Module...")
+    print("Starting secure deep-scan synchronization processing engine...")
     synced_ids, state_sha = get_synced_submissions()
     submissions = get_cf_submissions()
     
     if not submissions:
-        print("No submission history resolved or authorized.")
+        print("No authorization context or submission history resolved. System terminating safely.")
         return
 
     new_synced_ids = list(synced_ids)
@@ -135,12 +135,12 @@ def main():
             uploaded_any = True
 
     if uploaded_any:
-        print("Updating persistence registry state tracker inside Git-Forces...")
+        print("Writing updated state registry mapping to GitForces storage...")
         state_data = json.dumps({"synced_ids": new_synced_ids}, indent=4)
         write_to_github(ENGINE_REPO_FULL, STATE_FILE, state_data, "🔄 Update sync state register [skip ci]", state_sha)
-        print("All secure processes successfully terminated.")
+        print("Synchronization workflow finished successfully.")
     else:
-        print("Archive is fully synchronized with authorized profile status.")
+        print("All submission records are securely archived. Matrix stable.")
 
 if __name__ == "__main__":
     main()
