@@ -287,23 +287,12 @@ import requests
 
 token = os.getenv("GH_PAT")
 
-headers = {
-    "Authorization": f"token {token}"
-}
-
 r = requests.get(
     "https://api.github.com/user",
-    headers=headers
+    headers={
+        "Authorization": f"token {token}"
+    }
 )
 
-print("USER:", r.status_code)
-
-r = requests.get(
-    "https://api.github.com/user/repos?visibility=all&per_page=100",
-    headers=headers
-)
-
-print("REPOS:", r.status_code)
-
-for repo in r.json():
-    print(repo["full_name"], "PRIVATE =", repo["private"])
+print("STATUS:", r.status_code)
+print("SCOPES:", r.headers.get("X-OAuth-Scopes"))
