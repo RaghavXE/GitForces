@@ -7,7 +7,7 @@ import base64
 import requests
 
 CF_HANDLE = os.getenv("CF_HANDLE")
-GITHUB_USER = os.getenv("GH_USER")
+GH_USER = os.getenv("GH_USER")
 ENGINE_REPO = "GitForces"
 ARCHIVE_REPO = os.getenv("ARCHIVE_REPO")
 GH_PAT = os.getenv("GH_PAT")
@@ -30,7 +30,7 @@ HEADERS = {
 
 
 r = requests.get(
-    f"https://api.github.com/repos/{GITHUB_USER}/{ARCHIVE_REPO}",
+    f"https://api.github.com/repos/{GH_USER}/{ARCHIVE_REPO}",
     headers=HEADERS
 )
 
@@ -152,7 +152,7 @@ def get_state():
 def save_state(state):
     url = (
         f"https://api.github.com/repos/"
-        f"{GITHUB_USER}/{ENGINE_REPO}/contents/{STATE_FILE}"
+        f"{GH_USER}/{ENGINE_REPO}/contents/{STATE_FILE}"
     )
 
     current = requests.get(
@@ -184,7 +184,7 @@ def save_state(state):
 def upload_file(path, content):
     url = (
         f"https://api.github.com/repos/"
-        f"{GITHUB_USER}/{ARCHIVE_REPO}/contents/{path}"
+        f"{GH_USER}/{ARCHIVE_REPO}/contents/{path}"
     )
 
     payload = {
@@ -263,7 +263,7 @@ source = base64.b64decode(
 
 url = (
     f"https://api.github.com/repos/"
-    f"{GITHUB_USER}/{ARCHIVE_REPO}/contents/{filename}"
+    f"{GH_USER}/{ARCHIVE_REPO}/contents/{filename}"
 )
 
 payload = {
