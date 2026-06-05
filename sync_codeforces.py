@@ -9,7 +9,7 @@ import requests
 CF_HANDLE = os.getenv("CF_HANDLE")
 
 ENGINE_REPO = "GitForces"
-ARCHIVE_REPO = "Codeforces-Solutions-Archive"
+ARCHIVE_REPO = os.getenv("ARCHIVE_REPO")
 
 GH_PAT = os.getenv("GH_PAT")
 CF_KEY = os.getenv("CF_KEY")
