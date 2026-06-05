@@ -46,13 +46,11 @@ def generate_api_sig(method_name, params):
     return f"{rand_prefix}{hashed}"
 
 def get_all_cf_submissions():
-    """Queries Codeforces user status using automated page iteration to capture all records."""
     all_submissions = []
     start_row = 1
-    batch_count = 500  # Pulling in stable page blocks
+    batch_count = 500
     
     while True:
-        print(f"Requesting submissions tracking rows {start_row} to {start_row + batch_count - 1}...")
         current_time = int(time.time())
         params = {
             "handle": CF_HANDLE,
@@ -70,7 +68,6 @@ def get_all_cf_submissions():
         try:
             response = requests.get(url, params=params).json()
             if response["status"] != "OK":
-                print(f"Codeforces API tracking boundary reached or error occurred: {response.get('comment')}")
                 break
                 
             result_list = response["result"]
@@ -78,14 +75,12 @@ def get_all_cf_submissions():
                 break
                 
             all_submissions.extend(result_list)
-            # If we received less than the requested batch, we have reached the absolute end of history
             if len(result_list) < batch_count:
                 break
                 
             start_row += batch_count
-            time.sleep(1) # Polite gap to respect API rate boundaries
+            time.sleep(1)
         except Exception as e:
-            print(f"Network processing break: {e}")
             break
             
     return all_submissions
@@ -105,27 +100,41 @@ def clean_filename(name):
 
 def get_extension(lang):
     lang = lang.lower()
-    if "c++" in lang or "g++" in lang: return ".cpp"
+    if "c++" in lang or "g++" in lang or "clang++" in lang: return ".cpp"
     if "python" in lang or "pypy" in lang: return ".py"
     if "java" in lang: return ".java"
-    if "c " in lang or "gcc" in lang: return ".c"
-    if "c#" in lang: return ".cs"
-    return ".txt"
+    if "kotlin" in lang: return ".kt"
+    if "c " in lang or "gcc" in lang or "clang" in lang: return ".c"
+    if "c#" in lang or "mono" in lang: return ".cs"
+    if "go" in lang: return ".go"
+    if "javascript" in lang or "node" in lang: return ".js"
+    return None  # Return None if it's completely unmapped
 
 def process_single_submission(sub, synced_ids):
     sub_id = str(sub["id"])
-    if sub.get("verdict") != "OK" or "source" not in sub or sub_id in synced_ids:
+    verdict = sub.get("verdict")
+    lang = sub.get("programmingLanguage", "Unknown")
+    
+    # DIAGNOSTIC PRINT: Let's see what the script is rejecting
+    if verdict == "OK":
+        print(f"[DIAGNOSTIC] Found OK submission {sub_id}. Language string on Codeforces is: '{lang}'")
+
+    if verdict != "OK" or "source" not in sub or sub_id in synced_ids:
+        return False, None
+
+    ext = get_extension(lang)
+    if not ext:
+        print(f"[WARNING] Skipping submission {sub_id} because language '{lang}' is not mapped yet.")
         return False, None
 
     contest_id = sub.get("contestId", "Unknown")
     prob_index = sub["problem"]["index"]
     prob_name = clean_filename(sub["problem"]["name"])
-    ext = get_extension(sub["programmingLanguage"])
     
     file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
     commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
     
-    print(f"Syncing item to archive repository workspace: {contest_id}{prob_index}...")
+    print(f"-> Pushing solution: Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}")
     
     url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
     file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
@@ -143,7 +152,7 @@ def main():
         print("No authorization context or submission history resolved. System terminating safely.")
         return
 
-    print(f"Total submission footprint pulled: {len(submissions)} records. Checking for unique accepted entries...")
+    print(f"Total submission footprint pulled: {len(submissions)} records. Parsing timeline loops...")
     new_synced_ids = list(synced_ids)
     uploaded_any = False
 
@@ -159,7 +168,7 @@ def main():
         write_to_github(ENGINE_REPO_FULL, STATE_FILE, state_data, "🔄 Update sync state register [skip ci]", state_sha)
         print("Synchronization workflow finished successfully.")
     else:
-        print("All submission records are securely archived. Matrix stable.")
+        print("All matching submission records are completely up to date. Matrix stable.")
 
 if __name__ == "__main__":
     main()
