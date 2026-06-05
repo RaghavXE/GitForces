@@ -5,9 +5,9 @@ import json
 import re
 import sys
 
-# Configuration Parameters
+# Configuration Parameters (Aligned precisely to your actual repository layout)
 CF_HANDLE = "raghavSoniXE"
-TARGET_REPO = "Code-Forces-Solutions-Archive"
+TARGET_REPO = "Codeforces-Solutions-Archive"  # FIXED: Matches your exact repository name
 STATE_FILE = "cf_sync_state.json"
 
 GITHUB_TOKEN = os.getenv("GH_PAT")
@@ -68,7 +68,6 @@ def get_extension(lang):
     return ".txt"
 
 def process_single_submission(sub, synced_ids):
-    """Processes a single submission. Returns True if successfully uploaded."""
     sub_id = str(sub["id"])
     if sub.get("verdict") != "OK" or "source" not in sub or sub_id in synced_ids:
         return False, None
