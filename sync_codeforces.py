@@ -14,12 +14,7 @@ GH_PAT = os.getenv("GH_PAT")
 CF_KEY = os.getenv("CF_KEY")
 CF_SECRET = os.getenv("CF_SECRET")
 
-print("CF_HANDLE:", CF_HANDLE is not None)
-print("GH_USER:", GH_USER is not None)
-print("ARCHIVE_REPO:", ARCHIVE_REPO is not None)
-print("GH_PAT:", GH_PAT is not None)
-print("CF_KEY:", CF_KEY is not None)
-print("CF_SECRET:", CF_SECRET is not None)
+
 
 required = [
     CF_HANDLE,
