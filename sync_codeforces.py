@@ -5,7 +5,8 @@ import json
 import re
 import sys
 import time
-import hashlib
+import urllib.request
+import html
 
 # Configuration Parameters
 CF_HANDLE = "raghavSoniXE"
@@ -57,33 +58,33 @@ def get_all_cf_submissions():
         print(f"Network error querying user status list: {e}")
         return []
 
-def fetch_single_solution_text(contest_id, submission_id):
-    current_time = int(time.time())
-    params = {
-        "contestId": str(contest_id),
-        "handle": CF_HANDLE,
-        "from": "1",
-        "count": "10",
-        "apiKey": CF_KEY,
-        "time": str(current_time)
-    }
+def download_source_text_via_web(contest_id, submission_id):
+    """Fetches the code block text from the plain text interface using native headers."""
+    url = f"https://codeforces.com/contest/{contest_id}/submission/{submission_id}?f0al1=1"
     
-    api_sig = generate_api_sig("contest.status", params)
-    params["apiSig"] = api_sig
+    req = urllib.request.Request(url)
+    req.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    req.add_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+    req.add_header("Accept-Language", "en-US,en;q=0.5")
     
-    url = "https://codeforces.com/api/contest.status"
     try:
-        response = requests.get(url, params=params).json()
-        if response["status"] == "OK":
-            for sub in response["result"]:
-                if str(sub["id"]) == str(submission_id) and "source" in sub:
-                    return sub["source"]
-    except Exception:
-        pass
+        with urllib.request.urlopen(req, timeout=15) as response:
+            raw_html = response.read().decode("utf-8")
+            
+            # Extract content matching the raw pre blocks
+            match = re.search(r'<pre[^>]*>(.*?)</pre>', raw_html, re.DOTALL)
+            if match:
+                extracted_code = match.group(1)
+                return html.unescape(extracted_code).strip()
+            
+            if "challenge-platform" not in raw_html and "browser is being checked" not in raw_html:
+                if len(raw_html.strip()) > 40:
+                    return raw_html.strip()
+    except Exception as e:
+        print(f"   Network connection fallback error on ID {submission_id}: {e}")
     return None
 
 def check_github_file_exists(path):
-    """Queries the destination archive repository directly to verify if the file is already present."""
     url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{path}"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
@@ -128,9 +129,8 @@ def main():
 
     print(f"Total entries pulled from Codeforces API: {len(submissions)}")
     
-    # Process from oldest to newest to ensure chronological tracking
+    # Evaluate list from oldest entries forward
     for sub in reversed(submissions):
-        # Step 1: Filter out failed solutions strictly
         if sub.get("verdict") != "OK":
             continue
 
@@ -145,22 +145,21 @@ def main():
         
         file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
         
-        # Step 2: Directly check the destination repository for this file path
+        # Verify archive state before continuing
         exists_in_archive, file_sha = check_github_file_exists(file_path)
         
         if exists_in_archive:
             print(f"Skipping: {file_path} already exists in the archive repository.")
             continue
 
-        # Step 3: Fetch source code only if missing from the archive
         print(f"Processing missing solution: Problem {contest_id}{prob_index} (Submission ID: {sub_id})...")
         
-        # Enforce strict 3-second delay per submission to comply with the 2-second rate limit rule
+        # Consistent cooldown buffer to respect site infrastructure limits
         time.sleep(3.0)
-        source_code = fetch_single_solution_text(contest_id, sub_id)
+        source_code = download_source_text_via_web(contest_id, sub_id)
         
         if not source_code:
-            print(f"Warning: Source code text unavailable or rate limited for submission {sub_id}")
+            print(f"Warning: Source code text unavailable or restriction hit for submission {sub_id}")
             continue
 
         commit_msg = f"Add solution for Codeforces {contest_id}{prob_index}: {prob_name}"
