@@ -32,11 +32,11 @@ print("USER CHECK:", user.status_code)
 print(user.text)
 
 repos = requests.get(
-    "https://api.github.com/user/repos?per_page=100",
+    "https://api.github.com/user/repos?per_page=100&page=2",
     headers=HEADERS
 )
 
-print("REPOS STATUS:", repos.status_code)
+print("PAGE 2 STATUS:", repos.status_code)
 
 for repo in repos.json():
     print(repo["full_name"])
