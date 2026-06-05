@@ -67,6 +67,29 @@ def get_extension(lang):
     if "c#" in lang: return ".cs"
     return ".txt"
 
+def process_single_submission(sub, synced_ids):
+    """Processes a single submission. Returns True if successfully uploaded."""
+    sub_id = str(sub["id"])
+    if sub.get("verdict") != "OK" or "source" not in sub or sub_id in synced_ids:
+        return False, None
+
+    contest_id = sub.get("contestId", "Unknown")
+    prob_index = sub["problem"]["index"]
+    prob_name = clean_filename(sub["problem"]["name"])
+    ext = get_extension(sub["programmingLanguage"])
+    
+    file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
+    commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
+    
+    print(f"Syncing item to archive: {contest_id}{prob_index}...")
+    
+    url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
+    file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
+    file_sha = file_check.json().get("sha") if file_check.status_code == 200 else None
+    
+    success = write_to_github(ARCHIVE_REPO_FULL, file_path, sub["source"], commit_msg, file_sha)
+    return success, sub_id
+
 def main():
     print("Launching Git-Forces Core Sync Synchronization Module...")
     synced_ids, state_sha = get_synced_submissions()
@@ -80,36 +103,18 @@ def main():
     uploaded_any = False
 
     for sub in reversed(submissions):
-        sub_id = str(sub["id"])
-        
-        if sub.get("verdict") == "OK" and "source" in sub and sub_id not in synced_ids:
-            contest_id = sub.get("contestId", "Unknown")
-            prob_index = sub["problem"]["index"]
-            prob_name = clean_filename(sub["problem"]["name"])
-            ext = get_extension(sub["programmingLanguage"])
-            
-            file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
-            commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
-            
-            print(f"Syncing new item to archive repo: {contest_id}{prob_index}...")
-            
-            url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
-            file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
-            file_sha = file_check.json().get("sha") if file_check.status_code == 200 else None
-            
-            if write_to_github(ARCHIVE_REPO_FULL, file_path, sub["source"], commit_msg, file_sha):
-                new_synced_ids.append(sub_id)
-                uploaded_any = True
-            else:
-                print(f"❌ Commit failure on file: {file_path}")
+        uploaded, sub_id = process_single_submission(sub, synced_ids)
+        if uploaded:
+            new_synced_ids.append(sub_id)
+            uploaded_any = True
 
-    # if uploaded_any:
-    #     print("Updating persistence registry state tracker inside Git-Forces...")
-    #     state_data = json.dumps({"synced_ids": new_synced_ids}, indent=4)
-    #     write_to_github(ENGINE_REPO_FULL, STATE_FILE, state_data, "🔄 Update sync state register [skip ci]", state_sha)
-    #     print("All processes successfully terminated.")
-    # else:
-    #     print("Archive is fully updated with Codeforces account status. No tasks executed.")
+    if uploaded_any:
+        print("Updating persistence registry state tracker inside Git-Forces...")
+        state_data = json.dumps({"synced_ids": new_synced_ids}, indent=4)
+        write_to_github(ENGINE_REPO_FULL, STATE_FILE, state_data, "🔄 Update sync state register [skip ci]", state_sha)
+        print("All processes successfully terminated.")
+    else:
+        print("Archive is fully updated with Codeforces account status. No tasks executed.")
 
 if __name__ == "__main__":
     main()
