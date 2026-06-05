@@ -15,7 +15,19 @@ CF_KEY = os.getenv("CF_KEY")
 CF_SECRET = os.getenv("CF_SECRET")
 
 
+required = [
+    CF_HANDLE,
+    GH_USER,
+    ARCHIVE_REPO,
+    GH_PAT,
+    CF_KEY,
+    CF_SECRET
+]
 
+if not all(required):
+    raise Exception(
+        "Required environment variables missing"
+    )
 
 
 
@@ -24,21 +36,6 @@ HEADERS = {
     "Accept": "application/vnd.github+json"
 }
 
-
-
-
-
-
-r = requests.get(
-    f"https://api.github.com/repos/{GH_USER}/{ARCHIVE_REPO}",
-    headers=HEADERS
-)
-
-
-r = requests.get(
-    "https://api.github.com/user/repos?per_page=100",
-    headers=HEADERS
-)
 
 
 
@@ -202,7 +199,7 @@ def upload_file(path, content):
 
     return r.status_code in [200, 201]
 
-
+print("Fetching submissions...")
 submissions = get_all_submissions()
 
 accepted = []
@@ -228,6 +225,7 @@ for sub in reversed(submissions):
 accepted.sort(
     key=lambda x: x["creationTimeSeconds"]
 )
+print(f"Found {len(accepted)} accepted problems")
 
 state = get_state()
 
@@ -272,13 +270,14 @@ payload = {
         source.encode()
     ).decode()
 }
+print(f"Uploading: {filename}")
 r = requests.put(
     url,
     headers=HEADERS,
     json=payload
 )
 
-print("STATUS:", r.status_code)
+print(f"GitHub Response: {r.status_code}")
 
 if r.status_code in [200, 201]:
 
