@@ -15,10 +15,21 @@ GH_PAT = os.getenv("GH_PAT")
 CF_KEY = os.getenv("CF_KEY")
 CF_SECRET = os.getenv("CF_SECRET")
 
+
+print("PAT EXISTS:", GH_PAT is not None)
+
 HEADERS = {
     "Authorization": f"token {GH_PAT}",
     "Accept": "application/vnd.github+json"
 }
+
+user = requests.get(
+    "https://api.github.com/user",
+    headers=HEADERS
+)
+
+print("USER CHECK:", user.status_code)
+print(user.text)
 
 STATE_FILE = "sync_state.json"
 
