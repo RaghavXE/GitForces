@@ -285,7 +285,7 @@
 
 import os
 import requests
-
+print("GH_PAT length:", len(os.getenv("GH_PAT", "")))
 headers = {
     "Authorization": f"token {os.getenv('GH_PAT')}"
 }
@@ -303,3 +303,9 @@ r = requests.get(
 )
 
 print(r.status_code)
+
+token = os.getenv("GH_PAT")
+
+print("TOKEN EXISTS:", token is not None)
+print("TOKEN LENGTH:", len(token) if token else 0)
+print("TOKEN START:", token[:10] if token else "NONE")
