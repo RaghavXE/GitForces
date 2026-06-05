@@ -30,18 +30,40 @@ def generate_api_sig(method_name, params):
     hashed = hashlib.sha512(signature_string.encode('utf-8')).hexdigest()
     return f"{rand_prefix}{hashed}"
 
-def fetch_solution_via_contest_api(contest_id, submission_id):
-    """Queries contest.status while strictly following the 2-second rate limit rule."""
-    print(f"⏳ Pausing for 3 seconds to guarantee rate limit compliance...")
-    time.sleep(3.0)
+def get_all_cf_submissions():
+    start_row = 1
+    batch_count = 500
+    current_time = int(time.time())
     
-    print(f"📡 Querying official contest.status API for Contest: {contest_id}, Submission: {submission_id}...")
+    params = {
+        "handle": CF_HANDLE,
+        "from": str(start_row),
+        "count": str(batch_count),
+        "apiKey": CF_KEY,
+        "time": str(current_time)
+    }
+    
+    api_sig = generate_api_sig("user.status", params)
+    params["apiSig"] = api_sig
+    
+    url = "https://codeforces.com/api/user.status"
+    try:
+        response = requests.get(url, params=params).json()
+        if response["status"] != "OK":
+            print(f"Codeforces List Error: {response.get('comment')}")
+            return []
+        return response["result"]
+    except Exception as e:
+        print(f"Network error querying user status list: {e}")
+        return []
+
+def fetch_single_solution_text(contest_id, submission_id):
     current_time = int(time.time())
     params = {
         "contestId": str(contest_id),
         "handle": CF_HANDLE,
         "from": "1",
-        "count": "100",  # Looking deeper into the contest log to catch the handle row safely
+        "count": "10",
         "apiKey": CF_KEY,
         "time": str(current_time)
     }
@@ -54,24 +76,34 @@ def fetch_solution_via_contest_api(contest_id, submission_id):
         response = requests.get(url, params=params).json()
         if response["status"] == "OK":
             for sub in response["result"]:
-                if str(sub["id"]) == str(submission_id):
-                    return sub.get("source"), sub.get("programmingLanguage"), sub["problem"]["name"], sub["problem"]["index"]
-        else:
-            print(f"❌ Codeforces API rejected call: {response.get('comment')}")
-    except Exception as e:
-        print(f"❌ Network error: {e}")
-    return None, None, None, None
+                if str(sub["id"]) == str(submission_id) and "source" in sub:
+                    return sub["source"]
+    except Exception:
+        pass
+    return None
 
-def write_to_github(repo_full_name, path, content, message):
-    url = f"https://api.github.com/repos/{repo_full_name}/contents/{path}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+def check_github_file_exists(path):
+    """Queries the destination archive repository directly to verify if the file is already present."""
+    url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{path}"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    res = requests.get(url, headers=headers)
+    if res.status_code == 200:
+        return True, res.json().get("sha")
+    return False, None
+
+def write_to_github(path, content, message, sha=None):
+    url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{path}"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
     content_base64 = base64.b64encode(content.encode("utf-8")).decode("utf-8")
     data = {"message": message, "content": content_base64}
-    
-    file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
-    if file_check.status_code == 200:
-        data["sha"] = file_check.json().get("sha")
-        
+    if sha: 
+        data["sha"] = sha
     res = requests.put(url, headers=headers, json=data)
     return res.status_code in [200, 201]
 
@@ -82,34 +114,63 @@ def get_extension(lang):
     lang = lang.lower()
     if "c++" in lang or "g++" in lang: return ".cpp"
     if "python" in lang or "pypy" in lang: return ".py"
+    if "java" in lang: return ".java"
+    if "kotlin" in lang: return ".kt"
     return ".txt"
 
 def main():
-    print("🚀 Starting Targeted Oldest-Submission (First Problem) Sync Test...")
+    print("Starting direct repository verification synchronization engine...")
+    submissions = get_all_cf_submissions()
     
-    # Target submission 359011958 for your very first solved problem (1901A)
-    target_contest = 1901
-    target_sub_id = 359011958
-    
-    source_code, lang, prob_name, prob_index = fetch_solution_via_contest_api(target_contest, target_sub_id)
-    
-    if not source_code:
-        print(f"❌ Could not extract source code payload for your first submission ({target_sub_id}).")
+    if not submissions:
+        print("No submission footprint returned. Aborting execution.")
         return
 
-    print("✅ Success! Raw source text field captured via official API streams.")
+    print(f"Total entries pulled from Codeforces API: {len(submissions)}")
     
-    ext = get_extension(lang)
-    safe_name = clean_filename(prob_name)
-    file_path = f"Codeforces/{target_contest}/{prob_index}_{safe_name}{ext}"
-    
-    print(f"   Writing file to archive layout: {file_path}")
-    success = write_to_github(ARCHIVE_REPO_FULL, file_path, source_code, f"✨ Sync Oldest First Solution {target_sub_id}")
-    
-    if success:
-        print(f"\n🎉 SUCCESS! Your very first solution has been pushed to: {ARCHIVE_REPO_FULL}/{file_path}")
-    else:
-        print("❌ GitHub repository upload rejected.")
+    # Process from oldest to newest to ensure chronological tracking
+    for sub in reversed(submissions):
+        # Step 1: Filter out failed solutions strictly
+        if sub.get("verdict") != "OK":
+            continue
+
+        contest_id = sub.get("contestId")
+        if not contest_id or contest_id > 100000:
+            continue
+            
+        sub_id = str(sub["id"])
+        prob_index = sub["problem"]["index"]
+        prob_name = clean_filename(sub["problem"]["name"])
+        ext = get_extension(sub["programmingLanguage"])
+        
+        file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
+        
+        # Step 2: Directly check the destination repository for this file path
+        exists_in_archive, file_sha = check_github_file_exists(file_path)
+        
+        if exists_in_archive:
+            print(f"Skipping: {file_path} already exists in the archive repository.")
+            continue
+
+        # Step 3: Fetch source code only if missing from the archive
+        print(f"Processing missing solution: Problem {contest_id}{prob_index} (Submission ID: {sub_id})...")
+        
+        # Enforce strict 3-second delay per submission to comply with the 2-second rate limit rule
+        time.sleep(3.0)
+        source_code = fetch_single_solution_text(contest_id, sub_id)
+        
+        if not source_code:
+            print(f"Warning: Source code text unavailable or rate limited for submission {sub_id}")
+            continue
+
+        commit_msg = f"Add solution for Codeforces {contest_id}{prob_index}: {prob_name}"
+        
+        print(f"Pushing file directly to archive: {file_path}")
+        success = write_to_github(file_path, source_code, commit_msg, file_sha)
+        if not success:
+            print(f"Error: Failed to write {file_path} to GitHub.")
+            
+    print("Synchronization process completed.")
 
 if __name__ == "__main__":
     main()
