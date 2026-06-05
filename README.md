@@ -29,6 +29,18 @@ GitForces does the following:
 8. Runs automatically using GitHub Actions.
 
 ---
+Advantages
+1. Fully Automated – No manual downloading or uploading of solutions.
+2. Chronological Archive – Preserves the actual order in which problems were solved.
+3. Accepted Solutions Only – Filters out wrong answers, compilation errors, and failed submissions.
+4. Duplicate Prevention – Uploads only one accepted solution per problem.
+5. Multi-Language Support – Automatically detects and saves files with the correct extension.
+6. GitHub Activity Tracking – Uploads one solution per day to maintain consistent contributions.
+7. Secure Authentication – Uses GitHub Secrets and authenticated Codeforces API requests.
+8. Scalable Design – Can be extended to platforms like LeetCode, CodeChef, and AtCoder.
+9. Lightweight – No database required; progress is tracked using a simple JSON state file.
+10. Real-World Learning – Demonstrates API integration, automation, authentication, GitHub Actions, and CI/CD concepts.
+---
 
 ## Folder layout
 
