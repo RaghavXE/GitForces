@@ -41,6 +41,23 @@ print("PAGE 2 STATUS:", repos.status_code)
 for repo in repos.json():
     print(repo["full_name"])
 
+r = requests.get(
+    "https://api.github.com/repos/RaghavXE/GitForces",
+    headers=HEADERS
+)
+
+print("GITFORCES:", r.status_code)
+print(r.text)
+
+r = requests.get(
+    "https://api.github.com/repos/RaghavXE/Codeforces-Solutions-Archive",
+    headers=HEADERS
+)
+
+print("ARCHIVE:", r.status_code)
+print(r.text)
+
+
 STATE_FILE = "sync_state.json"
 
 
