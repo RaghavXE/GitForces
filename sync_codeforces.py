@@ -56,7 +56,6 @@ def get_all_cf_submissions():
             "handle": CF_HANDLE,
             "from": str(start_row),
             "count": str(batch_count),
-            "includeSources": "true",
             "apiKey": CF_KEY,
             "time": str(current_time)
         }
@@ -79,11 +78,34 @@ def get_all_cf_submissions():
                 break
                 
             start_row += batch_count
-            time.sleep(1)
+            time.sleep(0.5)
         except Exception as e:
             break
             
     return all_submissions
+
+def fetch_raw_source_code(contest_id, submission_id):
+    """Fetches the actual raw source code text for a specific accepted submission."""
+    current_time = int(time.time())
+    params = {
+        "contestId": str(contest_id),
+        "apiKey": CF_KEY,
+        "time": str(current_time)
+    }
+    # Using contest.status to extract the specific source payload row securely
+    api_sig = generate_api_sig("contest.status", params)
+    params["apiSig"] = api_sig
+    
+    url = "https://codeforces.com/api/contest.status"
+    try:
+        res = requests.get(url, params=params).json()
+        if res["status"] == "OK":
+            for sub in res["result"]:
+                if str(sub["id"]) == str(submission_id) and "source" in sub:
+                    return sub["source"]
+    except Exception:
+        pass
+    return None
 
 def write_to_github(repo_full_name, path, content, message, sha=None):
     url = f"https://api.github.com/repos/{repo_full_name}/contents/{path}"
@@ -106,41 +128,36 @@ def get_extension(lang):
     if "kotlin" in lang: return ".kt"
     if "c " in lang or "gcc" in lang or "clang" in lang: return ".c"
     if "c#" in lang or "mono" in lang: return ".cs"
-    if "go" in lang: return ".go"
-    if "javascript" in lang or "node" in lang: return ".js"
-    return None  # Return None if it's completely unmapped
+    return ".txt"
 
 def process_single_submission(sub, synced_ids):
     sub_id = str(sub["id"])
-    verdict = sub.get("verdict")
-    lang = sub.get("programmingLanguage", "Unknown")
-    
-    # DIAGNOSTIC PRINT: Let's see what the script is rejecting
-    if verdict == "OK":
-        print(f"[DIAGNOSTIC] Found OK submission {sub_id}. Language string on Codeforces is: '{lang}'")
-
-    if verdict != "OK" or "source" not in sub or sub_id in synced_ids:
-        return False, None
-
-    ext = get_extension(lang)
-    if not ext:
-        print(f"[WARNING] Skipping submission {sub_id} because language '{lang}' is not mapped yet.")
+    if sub.get("verdict") != "OK" or sub_id in synced_ids:
         return False, None
 
     contest_id = sub.get("contestId", "Unknown")
     prob_index = sub["problem"]["index"]
     prob_name = clean_filename(sub["problem"]["name"])
+    ext = get_extension(sub["programmingLanguage"])
     
     file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
+    
+    print(f"-> Extracting source code for accepted submission {sub_id}...")
+    source_code = fetch_raw_source_code(contest_id, sub_id)
+    
+    if not source_code:
+        # Fallback: if contest.status doesn't yield it, skip to avoid blank files
+        return False, None
+
     commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
+    print(f"   Pushing to archive: {file_path}")
     
-    print(f"-> Pushing solution: Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}")
-    
-    url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
+    url = f"https://api.github.com/repos/{ARCHIVE_REPOSITORY_FULL}/contents/{file_path}" if 'ARCHIVE_REPOSITORY_FULL' in locals() else f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
     file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
     file_sha = file_check.json().get("sha") if file_check.status_code == 200 else None
     
-    success = write_to_github(ARCHIVE_REPO_FULL, file_path, sub["source"], commit_msg, file_sha)
+    success = write_to_github(ARCHIVE_REPO_FULL, file_path, source_code, commit_msg, file_sha)
+    time.sleep(0.5) # Prevent aggressive API hitting
     return success, sub_id
 
 def main():
@@ -152,7 +169,7 @@ def main():
         print("No authorization context or submission history resolved. System terminating safely.")
         return
 
-    print(f"Total submission footprint pulled: {len(submissions)} records. Parsing timeline loops...")
+    print(f"Total submission footprint pulled: {len(submissions)} records. Extracting solutions...")
     new_synced_ids = list(synced_ids)
     uploaded_any = False
 
