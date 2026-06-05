@@ -7,6 +7,7 @@ import sys
 import time
 import urllib.request
 import html
+import hashlib  # Included to resolve the NameError
 
 # Configuration Parameters
 CF_HANDLE = "raghavSoniXE"
@@ -59,7 +60,6 @@ def get_all_cf_submissions():
         return []
 
 def download_source_text_via_web(contest_id, submission_id):
-    """Fetches the code block text from the plain text interface using native headers."""
     url = f"https://codeforces.com/contest/{contest_id}/submission/{submission_id}?f0al1=1"
     
     req = urllib.request.Request(url)
@@ -71,7 +71,6 @@ def download_source_text_via_web(contest_id, submission_id):
         with urllib.request.urlopen(req, timeout=15) as response:
             raw_html = response.read().decode("utf-8")
             
-            # Extract content matching the raw pre blocks
             match = re.search(r'<pre[^>]*>(.*?)</pre>', raw_html, re.DOTALL)
             if match:
                 extracted_code = match.group(1)
@@ -129,7 +128,6 @@ def main():
 
     print(f"Total entries pulled from Codeforces API: {len(submissions)}")
     
-    # Evaluate list from oldest entries forward
     for sub in reversed(submissions):
         if sub.get("verdict") != "OK":
             continue
@@ -145,7 +143,6 @@ def main():
         
         file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
         
-        # Verify archive state before continuing
         exists_in_archive, file_sha = check_github_file_exists(file_path)
         
         if exists_in_archive:
@@ -154,7 +151,6 @@ def main():
 
         print(f"Processing missing solution: Problem {contest_id}{prob_index} (Submission ID: {sub_id})...")
         
-        # Consistent cooldown buffer to respect site infrastructure limits
         time.sleep(3.0)
         source_code = download_source_text_via_web(contest_id, sub_id)
         
