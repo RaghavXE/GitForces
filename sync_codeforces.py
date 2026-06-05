@@ -58,6 +58,19 @@ print("ARCHIVE:", r.status_code)
 print(r.text)
 
 
+r = requests.get(
+    "https://api.github.com/user/repos?per_page=100",
+    headers=HEADERS
+)
+
+print("TOTAL REPOS:", len(r.json()))
+
+
+
+
+
+
+
 STATE_FILE = "sync_state.json"
 
 
