@@ -10,7 +10,6 @@ import hashlib
 # Configuration Parameters
 CF_HANDLE = "raghavSoniXE"
 TARGET_REPO = "Codeforces-Solutions-Archive"
-STATE_FILE = "cf_sync_state.json"
 
 # Extract secrets from the encrypted GitHub runner vault
 GITHUB_TOKEN = os.getenv("GH_PAT")
@@ -22,21 +21,7 @@ if not all([GITHUB_TOKEN, GITHUB_ACTOR, CF_KEY, CF_SECRET]):
     print("Security Validation Error: Missing internal secrets inside the runner container environment.")
     sys.exit(1)
 
-ENGINE_REPO_FULL = f"{GITHUB_ACTOR}/GitForces"
 ARCHIVE_REPO_FULL = f"{GITHUB_ACTOR}/{TARGET_REPO}"
-
-def get_synced_submissions():
-    url = f"https://api.github.com/repos/{ENGINE_REPO_FULL}/contents/{STATE_FILE}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    res = requests.get(url, headers=headers)
-    if res.status_code == 200:
-        content = base64.b64decode(res.json()["content"]).decode("utf-8")
-        try:
-            state = json.loads(content)
-            return set(state.get("synced_ids", [])), res.json()["sha"]
-        except Exception:
-            return set(), res.json()["sha"]
-    return set(), None
 
 def generate_api_sig(method_name, params):
     rand_prefix = "123456"
@@ -45,20 +30,17 @@ def generate_api_sig(method_name, params):
     hashed = hashlib.sha512(signature_string.encode('utf-8')).hexdigest()
     return f"{rand_prefix}{hashed}"
 
-def get_all_cf_submissions():
-    """Fetches user status metadata list."""
-    start_row = 1
-    batch_count = 500
+def get_submission_batch():
+    """Fetches the last 10 submissions using your API keys."""
+    print(f"📡 Pulling recent submissions for {CF_HANDLE}...")
     current_time = int(time.time())
-    
     params = {
         "handle": CF_HANDLE,
-        "from": str(start_row),
-        "count": str(batch_count),
+        "from": "1",
+        "count": "10",
         "apiKey": CF_KEY,
         "time": str(current_time)
     }
-    
     api_sig = generate_api_sig("user.status", params)
     params["apiSig"] = api_sig
     
@@ -66,48 +48,24 @@ def get_all_cf_submissions():
     try:
         response = requests.get(url, params=params).json()
         if response["status"] != "OK":
-            print(f"Codeforces List Error: {response.get('comment')}")
+            print(f"❌ Codeforces API Error: {response.get('comment')}")
             return []
         return response["result"]
     except Exception as e:
-        print(f"Network error querying user status list: {e}")
+        print(f"❌ Network error: {e}")
         return []
 
-def fetch_single_solution_text(contest_id, submission_id):
-    """Queries contest.status securely. Complies with the 2-second rate limit."""
-    current_time = int(time.time())
-    params = {
-        "contestId": str(contest_id),
-        "handle": CF_HANDLE,
-        "from": "1",
-        "count": "10",
-        "apiKey": CF_KEY,
-        "time": str(current_time)
-    }
-    
-    api_sig = generate_api_sig("contest.status", params)
-    params["apiSig"] = api_sig
-    
-    url = "https://codeforces.com/api/contest.status"
-    try:
-        response = requests.get(url, params=params).json()
-        if response["status"] == "OK":
-            for sub in response["result"]:
-                if str(sub["id"]) == str(submission_id) and "source" in sub:
-                    return sub["source"]
-        else:
-            print(f"   ❌ Codeforces API rejected call: {response.get('comment')}")
-    except Exception as e:
-        print(f"   ⚠️ Request processing error: {e}")
-    return None
-
-def write_to_github(repo_full_name, path, content, message, sha=None):
+def write_to_github(repo_full_name, path, content, message):
     url = f"https://api.github.com/repos/{repo_full_name}/contents/{path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     content_base64 = base64.b64encode(content.encode("utf-8")).decode("utf-8")
     data = {"message": message, "content": content_base64}
-    if sha: 
-        data["sha"] = sha
+    
+    # Check if file already exists to get its SHA
+    file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
+    if file_check.status_code == 200:
+        data["sha"] = file_check.json().get("sha")
+        
     res = requests.put(url, headers=headers, json=data)
     return res.status_code in [200, 201]
 
@@ -118,74 +76,52 @@ def get_extension(lang):
     lang = lang.lower()
     if "c++" in lang or "g++" in lang: return ".cpp"
     if "python" in lang or "pypy" in lang: return ".py"
-    if "java" in lang: return ".java"
-    if "kotlin" in lang: return ".kt"
     return ".txt"
 
-def process_single_submission(sub, synced_ids):
-    sub_id = str(sub["id"])
-    if sub.get("verdict") != "OK" or sub_id in synced_ids:
-        return False, None
-
-    contest_id = sub.get("contestId")
-    if not contest_id or contest_id > 100000:
-        return False, None
-        
-    prob_index = sub["problem"]["index"]
-    prob_name = clean_filename(sub["problem"]["name"])
-    ext = get_extension(sub["programmingLanguage"])
-    
-    file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
-    
-    print(f"🚀 Downloading solution text for problem {contest_id}{prob_index} (ID: {sub_id})...")
-    
-    # CRITICAL COOLDOWN STEP
-    # Codeforces rules state: "API may be requested at most 1 time per two seconds."
-    # We sleep for 3 full seconds before making the API call to guarantee compliance.
-    time.sleep(3.0) 
-    
-    source_code = fetch_single_solution_text(contest_id, sub_id)
-    
-    if not source_code:
-        print(f"   ⚠️ Source string skipped or call limit triggered for ID {sub_id}")
-        return False, None
-
-    commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
-    
-    url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
-    file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
-    file_sha = file_check.json().get("sha") if file_check.status_code == 200 else None
-    
-    print(f"   Writing clean file directly to repository layout: {file_path}")
-    success = write_to_github(ARCHIVE_REPO_FULL, file_path, source_code, commit_msg, file_sha)
-    return success, sub_id
-
 def main():
-    print("Launching Cloud-Bypass API Synchronization Engine...")
-    synced_ids, state_sha = get_synced_submissions()
-    submissions = get_all_cf_submissions()
+    print("🚀 Starting Single-Solution Force-Push Test...")
+    submissions = get_submission_batch()
     
     if not submissions:
-        print("No submission footprint returned. Aborting cloud execution.")
+        print("❌ No submissions found.")
         return
 
-    print(f"Total entries pulled successfully from Codeforces API: {len(submissions)}")
-    new_synced_ids = list(synced_ids)
-    uploaded_any = False
+    # Find exactly ONE accepted item to process
+    target_sub = None
+    for sub in submissions:
+        if sub.get("verdict") == "OK":
+            target_sub = sub
+            break
 
-    for sub in reversed(submissions):
-        uploaded, sub_id = process_single_submission(sub, synced_ids)
-        if uploaded:
-            new_synced_ids.append(sub_id)
-            uploaded_any = True
+    if not target_sub:
+        print("❌ No accepted (OK) submissions found in the last 10 items.")
+        return
 
-    if uploaded_any:
-        print("Writing updated state registry mapping to GitForces storage...")
-        state_data = json.dumps({"synced_ids": new_synced_ids}, indent=4)
-        write_to_github(ENGINE_REPO_FULL, STATE_FILE, state_data, "🔄 Update sync state register [skip ci]", state_sha)
-        print("Synchronization workflow completed successfully.")
+    sub_id = target_sub["id"]
+    contest_id = target_sub.get("contestId", "Unknown")
+    prob_index = target_sub["problem"]["index"]
+    prob_name = clean_filename(target_sub["problem"]["name"])
+    ext = get_extension(target_sub["programmingLanguage"])
+    file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
+    
+    print(f"🎯 Target selected: Problem {contest_id}{prob_index} (Submission ID: {sub_id})")
+    
+    # Print the keys inside the item to see what fields Codeforces actually sent us
+    print(f"📊 Available data fields in this submission: {list(target_sub.keys())}")
+    
+    source_code = target_sub.get("source")
+    if not source_code:
+        print("❌ Codeforces did not include 'source' code text inside the user.status response.")
+        print("💡 This confirms user.status cannot be used to fetch source code directly via API.")
+        return
+
+    print("🔑 Success! Found source code payload. Pushing directly to GitHub archive...")
+    success = write_to_github(ARCHIVE_REPO_FULL, file_path, source_code, f"✨ Force Sync Test Solution {sub_id}")
+    
+    if success:
+        print(f"🎉 SUCCESS! Clean solution file pushed to: {ARCHIVE_REPO_FULL}/{file_path}")
     else:
-        print("All submission records are securely archived. Matrix stable.")
+        print("❌ GitHub upload failed. Check your GH_PAT permissions.")
 
 if __name__ == "__main__":
     main()
