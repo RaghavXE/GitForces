@@ -74,7 +74,6 @@ def get_all_cf_submissions():
         return []
 
 def fetch_single_solution_text(contest_id, submission_id):
-    """Safely pulls single code block without triggering broad contest dumps."""
     current_time = int(time.time())
     params = {
         "contestId": str(contest_id),
@@ -139,16 +138,19 @@ def process_single_submission(sub, synced_ids):
     source_code = fetch_single_solution_text(contest_id, sub_id)
     
     if not source_code:
+        print(f"   ⚠️ Source string empty or missing for submission {sub_id}")
         return False, None
 
     commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
     
+    # FIX: Unified clean repository path string mapping
     url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
     file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
     file_sha = file_check.json().get("sha") if file_check.status_code == 200 else None
     
+    print(f"   Pushing clean file directly to repository layout: {file_path}")
     success = write_to_github(ARCHIVE_REPO_FULL, file_path, source_code, commit_msg, file_sha)
-    time.sleep(1)  # Keeps Codeforces API rate limits completely stable
+    time.sleep(1)
     return success, sub_id
 
 def main():
