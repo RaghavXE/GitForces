@@ -211,15 +211,23 @@ source = base64.b64decode(
     errors="ignore"
 )
 
-ok = upload_file(
-    filename,
-    source
+url = (
+    f"https://api.github.com/repos/"
+    f"RaghavXE/{ARCHIVE_REPO}/contents/{filename}"
 )
 
-if ok:
-    state["next_index"] += 1
-    save_state(state)
+payload = {
+    "message": f"Add {filename}",
+    "content": base64.b64encode(
+        source.encode()
+    ).decode()
+}
 
-    print("Uploaded:", filename)
-else:
-    print("Upload failed")
+r = requests.put(
+    url,
+    headers=HEADERS,
+    json=payload
+)
+
+print("STATUS:", r.status_code)
+print(r.text)
