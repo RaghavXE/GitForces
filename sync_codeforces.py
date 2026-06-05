@@ -21,7 +21,7 @@ def build_signed_url():
     params = {
         "handle": CF_HANDLE,
         "from": "1",
-        "count": "1",
+        "count": "100",
         "includeSources": "true",
         "apiKey": CF_KEY,
         "time": current_time,
@@ -62,7 +62,7 @@ response = requests.get(url, timeout=30)
 print("HTTP:", response.status_code)
 
 data = response.json()
-
+print("Returned:", len(data["result"]))
 print("STATUS:", data.get("status"))
 
 print(data)
