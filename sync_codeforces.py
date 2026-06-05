@@ -103,13 +103,13 @@ def main():
             else:
                 print(f"❌ Commit failure on file: {file_path}")
 
-    if uploaded_any:
-        print("Updating persistence registry state tracker inside Git-Forces...")
-        state_data = json.dumps({"synced_ids": new_synced_ids}, indent=4)
-        write_to_github(ENGINE_REPO_FULL, STATE_FILE, state_data, "🔄 Update sync state register [skip ci]", state_sha)
-        print("All processes successfully terminated.")
-    else:
-        print("Archive is fully updated with Codeforces account status. No tasks executed.")
+    # if uploaded_any:
+    #     print("Updating persistence registry state tracker inside Git-Forces...")
+    #     state_data = json.dumps({"synced_ids": new_synced_ids}, indent=4)
+    #     write_to_github(ENGINE_REPO_FULL, STATE_FILE, state_data, "🔄 Update sync state register [skip ci]", state_sha)
+    #     print("All processes successfully terminated.")
+    # else:
+    #     print("Archive is fully updated with Codeforces account status. No tasks executed.")
 
 if __name__ == "__main__":
     main()
