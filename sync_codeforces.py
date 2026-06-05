@@ -282,30 +282,28 @@
 # print(r.text)
 
 
-
 import os
 import requests
-print("GH_PAT length:", len(os.getenv("GH_PAT", "")))
-headers = {
-    "Authorization": f"token {os.getenv('GH_PAT')}"
-}
-
-r = requests.get(
-    "https://api.github.com/repos/RaghavXE/GitForces",
-    headers=headers
-)
-
-print(r.status_code)
-
-r = requests.get(
-    "https://api.github.com/repos/RaghavXE/Codeforces-Solutions-Archive",
-    headers=headers
-)
-
-print(r.status_code)
 
 token = os.getenv("GH_PAT")
 
-print("TOKEN EXISTS:", token is not None)
-print("TOKEN LENGTH:", len(token) if token else 0)
-print("TOKEN START:", token[:10] if token else "NONE")
+headers = {
+    "Authorization": f"token {token}"
+}
+
+r = requests.get(
+    "https://api.github.com/user",
+    headers=headers
+)
+
+print("USER:", r.status_code)
+
+r = requests.get(
+    "https://api.github.com/user/repos?visibility=all&per_page=100",
+    headers=headers
+)
+
+print("REPOS:", r.status_code)
+
+for repo in r.json():
+    print(repo["full_name"], "PRIVATE =", repo["private"])
