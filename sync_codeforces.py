@@ -31,13 +31,15 @@ user = requests.get(
 print("USER CHECK:", user.status_code)
 print(user.text)
 
-repo_check = requests.get(
-    "https://api.github.com/repos/RaghavXE/Codeforces-Solutions-Archive",
+repos = requests.get(
+    "https://api.github.com/user/repos?per_page=100",
     headers=HEADERS
 )
 
-print("REPO CHECK:", repo_check.status_code)
-print(repo_check.text)
+print("REPOS STATUS:", repos.status_code)
+
+for repo in repos.json():
+    print(repo["full_name"])
 
 STATE_FILE = "sync_state.json"
 
