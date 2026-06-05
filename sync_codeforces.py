@@ -50,57 +50,49 @@ def get_all_cf_submissions():
     start_row = 1
     batch_count = 500
     
-    while True:
-        current_time = int(time.time())
-        params = {
-            "handle": CF_HANDLE,
-            "from": str(start_row),
-            "count": str(batch_count),
-            "apiKey": CF_KEY,
-            "time": str(current_time)
-        }
-        
-        api_sig = generate_api_sig("user.status", params)
-        params["apiSig"] = api_sig
-        
-        url = "https://codeforces.com/api/user.status"
-        try:
-            response = requests.get(url, params=params).json()
-            if response["status"] != "OK":
-                break
-                
-            result_list = response["result"]
-            if not result_list:
-                break
-                
-            all_submissions.extend(result_list)
-            if len(result_list) < batch_count:
-                break
-                
-            start_row += batch_count
-        except Exception:
-            break
-            
-    return all_submissions
-
-def fetch_raw_source_code(contest_id, submission_id):
-    """Fetches submission data filtered precisely by your handle to avoid server timeouts."""
     current_time = int(time.time())
     params = {
-        "contestId": str(contest_id),
-        "handle": CF_HANDLE,  # CRITICAL FILTER: Tells Codeforces to only return YOUR code
+        "handle": CF_HANDLE,
+        "from": str(start_row),
+        "count": str(batch_count),
         "apiKey": CF_KEY,
         "time": str(current_time)
     }
     
-    api_sig = generate_api_sig("contest.submissions", params)
+    api_sig = generate_api_sig("user.status", params)
     params["apiSig"] = api_sig
     
-    url = "https://codeforces.com/api/contest.submissions"
+    url = "https://codeforces.com/api/user.status"
     try:
-        res = requests.get(url, params=params).json()
-        if res["status"] == "OK":
-            for sub in res["result"]:
+        response = requests.get(url, params=params).json()
+        if response["status"] != "OK":
+            print(f"Codeforces List Error: {response.get('comment')}")
+            return []
+        return response["result"]
+    except Exception as e:
+        print(f"Network error querying user status list: {e}")
+        return []
+
+def fetch_single_solution_text(contest_id, submission_id):
+    """Safely pulls single code block without triggering broad contest dumps."""
+    current_time = int(time.time())
+    params = {
+        "contestId": str(contest_id),
+        "handle": CF_HANDLE,
+        "from": "1",
+        "count": "10",
+        "apiKey": CF_KEY,
+        "time": str(current_time)
+    }
+    
+    api_sig = generate_api_sig("contest.status", params)
+    params["apiSig"] = api_sig
+    
+    url = "https://codeforces.com/api/contest.status"
+    try:
+        response = requests.get(url, params=params).json()
+        if response["status"] == "OK":
+            for sub in response["result"]:
                 if str(sub["id"]) == str(submission_id) and "source" in sub:
                     return sub["source"]
     except Exception:
@@ -122,12 +114,10 @@ def clean_filename(name):
 
 def get_extension(lang):
     lang = lang.lower()
-    if "c++" in lang or "g++" in lang or "clang++" in lang: return ".cpp"
+    if "c++" in lang or "g++" in lang: return ".cpp"
     if "python" in lang or "pypy" in lang: return ".py"
     if "java" in lang: return ".java"
     if "kotlin" in lang: return ".kt"
-    if "c " in lang or "gcc" in lang or "clang" in lang: return ".c"
-    if "c#" in lang or "mono" in lang: return ".cs"
     return ".txt"
 
 def process_single_submission(sub, synced_ids):
@@ -135,40 +125,42 @@ def process_single_submission(sub, synced_ids):
     if sub.get("verdict") != "OK" or sub_id in synced_ids:
         return False, None
 
-    contest_id = sub.get("contestId", "Unknown")
+    contest_id = sub.get("contestId")
+    if not contest_id or contest_id > 100000:
+        return False, None
+        
     prob_index = sub["problem"]["index"]
     prob_name = clean_filename(sub["problem"]["name"])
     ext = get_extension(sub["programmingLanguage"])
     
     file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
     
-    print(f"-> Pulling source text for submission {sub_id}...")
-    source_code = fetch_raw_source_code(contest_id, sub_id)
+    print(f"🚀 Cloud runner downloading solution text for problem {contest_id}{prob_index} (ID: {sub_id})...")
+    source_code = fetch_single_solution_text(contest_id, sub_id)
     
     if not source_code:
-        print(f"   [Skip] Source text unavailable for ID {sub_id}")
         return False, None
 
     commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
-    print(f"   Writing file to archive: {file_path}")
     
     url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
     file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
     file_sha = file_check.json().get("sha") if file_check.status_code == 200 else None
     
     success = write_to_github(ARCHIVE_REPO_FULL, file_path, source_code, commit_msg, file_sha)
+    time.sleep(1)  # Keeps Codeforces API rate limits completely stable
     return success, sub_id
 
 def main():
-    print("Starting optimized targeted synchronization processing engine...")
+    print("Launching Cloud-Bypass API Synchronization Engine...")
     synced_ids, state_sha = get_synced_submissions()
     submissions = get_all_cf_submissions()
     
     if not submissions:
-        print("No submission history resolved. System terminating safely.")
+        print("No submission footprint returned. Aborting cloud execution.")
         return
 
-    print(f"Total submission footprint pulled: {len(submissions)} records. Filtering targets...")
+    print(f"Total entries pulled successfully from Codeforces API: {len(submissions)}")
     new_synced_ids = list(synced_ids)
     uploaded_any = False
 
@@ -182,9 +174,9 @@ def main():
         print("Writing updated state registry mapping to GitForces storage...")
         state_data = json.dumps({"synced_ids": new_synced_ids}, indent=4)
         write_to_github(ENGINE_REPO_FULL, STATE_FILE, state_data, "🔄 Update sync state register [skip ci]", state_sha)
-        print("Synchronization workflow finished successfully.")
+        print("Synchronization workflow completed successfully.")
     else:
-        print("All matching submission records are completely up to date. Matrix stable.")
+        print("All submission records are securely archived. Matrix stable.")
 
 if __name__ == "__main__":
     main()
