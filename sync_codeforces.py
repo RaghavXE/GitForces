@@ -46,11 +46,11 @@ def generate_api_sig(method_name, params):
     return f"{rand_prefix}{hashed}"
 
 def get_all_cf_submissions():
-    all_submissions = []
+    """Fetches user status metadata list."""
     start_row = 1
     batch_count = 500
-    
     current_time = int(time.time())
+    
     params = {
         "handle": CF_HANDLE,
         "from": str(start_row),
@@ -74,6 +74,7 @@ def get_all_cf_submissions():
         return []
 
 def fetch_single_solution_text(contest_id, submission_id):
+    """Queries contest.status securely. Complies with the 2-second rate limit."""
     current_time = int(time.time())
     params = {
         "contestId": str(contest_id),
@@ -94,8 +95,10 @@ def fetch_single_solution_text(contest_id, submission_id):
             for sub in response["result"]:
                 if str(sub["id"]) == str(submission_id) and "source" in sub:
                     return sub["source"]
-    except Exception:
-        pass
+        else:
+            print(f"   ❌ Codeforces API rejected call: {response.get('comment')}")
+    except Exception as e:
+        print(f"   ⚠️ Request processing error: {e}")
     return None
 
 def write_to_github(repo_full_name, path, content, message, sha=None):
@@ -134,23 +137,27 @@ def process_single_submission(sub, synced_ids):
     
     file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
     
-    print(f"🚀 Cloud runner downloading solution text for problem {contest_id}{prob_index} (ID: {sub_id})...")
+    print(f"🚀 Downloading solution text for problem {contest_id}{prob_index} (ID: {sub_id})...")
+    
+    # CRITICAL COOLDOWN STEP
+    # Codeforces rules state: "API may be requested at most 1 time per two seconds."
+    # We sleep for 3 full seconds before making the API call to guarantee compliance.
+    time.sleep(3.0) 
+    
     source_code = fetch_single_solution_text(contest_id, sub_id)
     
     if not source_code:
-        print(f"   ⚠️ Source string empty or missing for submission {sub_id}")
+        print(f"   ⚠️ Source string skipped or call limit triggered for ID {sub_id}")
         return False, None
 
     commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
     
-    # FIX: Unified clean repository path string mapping
     url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
     file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
     file_sha = file_check.json().get("sha") if file_check.status_code == 200 else None
     
-    print(f"   Pushing clean file directly to repository layout: {file_path}")
+    print(f"   Writing clean file directly to repository layout: {file_path}")
     success = write_to_github(ARCHIVE_REPO_FULL, file_path, source_code, commit_msg, file_sha)
-    time.sleep(1)
     return success, sub_id
 
 def main():
