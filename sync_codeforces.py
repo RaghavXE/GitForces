@@ -49,7 +49,7 @@ r = requests.get(
 # print("GITFORCES:", r.status_code)
 # print(r.text)
 
-GITHUB_USER = os.getenv("GITHUB_USER")
+GITHUB_USER = os.getenv("GH_USER")
 
 r = requests.get(
     f"https://api.github.com/repos/{GITHUB_USER}/{ARCHIVE_REPO}",
