@@ -4,17 +4,22 @@ import base64
 import json
 import re
 import sys
+import time
+import hashlib
 
-# Configuration Parameters (Aligned precisely to your actual repository layout)
+# Configuration Parameters
 CF_HANDLE = "raghavSoniXE"
-TARGET_REPO = "Codeforces-Solutions-Archive"  # FIXED: Matches your exact repository name
+TARGET_REPO = "Codeforces-Solutions-Archive"
 STATE_FILE = "cf_sync_state.json"
 
+# Credentials Extraction
 GITHUB_TOKEN = os.getenv("GH_PAT")
-GITHUB_ACTOR = os.getenv("GITHUB_ACTOR") 
+GITHUB_ACTOR = os.getenv("GITHUB_ACTOR")
+CF_KEY = os.getenv("CF_KEY")
+CF_SECRET = os.getenv("CF_SECRET")
 
-if not GITHUB_TOKEN or not GITHUB_ACTOR:
-    print("Error: Missing internal security environment configuration variables.")
+if not all([GITHUB_TOKEN, GITHUB_ACTOR, CF_KEY, CF_SECRET]):
+    print("Error: Missing internal security credentials in environment variables.")
     sys.exit(1)
 
 ENGINE_REPO_FULL = f"{GITHUB_ACTOR}/GitForces"
@@ -33,16 +38,38 @@ def get_synced_submissions():
             return set(), res.json()["sha"]
     return set(), None
 
+def generate_api_sig(method_name, params):
+    """Generates an authorized SHA-512 signature required by Codeforces."""
+    rand_prefix = "123456"
+    ordered_params = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+    signature_string = f"{rand_prefix}/{method_name}?{ordered_params}#{CF_SECRET}"
+    hashed = hashlib.sha512(signature_string.encode('utf-8')).hexdigest()
+    return f"{rand_prefix}{hashed}"
+
 def get_cf_submissions():
-    url = f"https://codeforces.com/api/user.status?handle={CF_HANDLE}&from=1&count=100&includeSources=true"
+    """Fetches submission data with authenticated permissions."""
+    current_time = int(time.time())
+    params = {
+        "handle": CF_HANDLE,
+        "from": "1",
+        "count": "100",
+        "includeSources": "true",
+        "apiKey": CF_KEY,
+        "time": str(current_time)
+    }
+    
+    api_sig = generate_api_sig("user.status", params)
+    params["apiSig"] = api_sig
+    
+    url = "https://codeforces.com/api/user.status"
     try:
-        response = requests.get(url).json()
+        response = requests.get(url, params=params).json()
         if response["status"] != "OK":
-            print(f"Codeforces Error: {response.get('comment')}")
+            print(f"Codeforces Authentication Error: {response.get('comment')}")
             return []
         return response["result"]
     except Exception as e:
-        print(f"Connection failure to Codeforces API: {e}")
+        print(f"Secure connection failure to Codeforces API: {e}")
         return []
 
 def write_to_github(repo_full_name, path, content, message, sha=None):
@@ -80,7 +107,7 @@ def process_single_submission(sub, synced_ids):
     file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
     commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
     
-    print(f"Syncing item to archive: {contest_id}{prob_index}...")
+    print(f"Syncing authenticated item to archive: {contest_id}{prob_index}...")
     
     url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
     file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
@@ -90,12 +117,12 @@ def process_single_submission(sub, synced_ids):
     return success, sub_id
 
 def main():
-    print("Launching Git-Forces Core Sync Synchronization Module...")
+    print("Launching Secure Git-Forces Integration Module...")
     synced_ids, state_sha = get_synced_submissions()
     submissions = get_cf_submissions()
     
     if not submissions:
-        print("No submission history resolved.")
+        print("No submission history resolved or authorized.")
         return
 
     new_synced_ids = list(synced_ids)
@@ -111,9 +138,9 @@ def main():
         print("Updating persistence registry state tracker inside Git-Forces...")
         state_data = json.dumps({"synced_ids": new_synced_ids}, indent=4)
         write_to_github(ENGINE_REPO_FULL, STATE_FILE, state_data, "🔄 Update sync state register [skip ci]", state_sha)
-        print("All processes successfully terminated.")
+        print("All secure processes successfully terminated.")
     else:
-        print("Archive is fully updated with Codeforces account status. No tasks executed.")
+        print("Archive is fully synchronized with authorized profile status.")
 
 if __name__ == "__main__":
     main()
