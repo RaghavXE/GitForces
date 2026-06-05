@@ -1,45 +1,68 @@
+import os
+import time
+import random
+import hashlib
 import requests
 
 CF_HANDLE = "raghavSoniXE"
 
+CF_KEY = os.getenv("CF_KEY")
+CF_SECRET = os.getenv("CF_SECRET")
 
-def get_submissions():
-    url = (
-        f"https://codeforces.com/api/user.status"
-        f"?handle={CF_HANDLE}"
-        f"&from=1"
-        f"&count=1"
-        f"&includeSources=true"
+if not CF_KEY or not CF_SECRET:
+    raise Exception("CF_KEY or CF_SECRET missing")
+
+
+def build_signed_url():
+    method = "user.status"
+
+    current_time = str(int(time.time()))
+
+    params = {
+        "handle": CF_HANDLE,
+        "from": "1",
+        "count": "1",
+        "includeSources": "true",
+        "apiKey": CF_KEY,
+        "time": current_time,
+    }
+
+    rand = str(random.randint(100000, 999999))
+
+    sorted_params = "&".join(
+        f"{k}={params[k]}"
+        for k in sorted(params)
     )
 
-    response = requests.get(url, timeout=30)
+    sig_string = (
+        f"{rand}/{method}?"
+        f"{sorted_params}"
+        f"#{CF_SECRET}"
+    )
 
-    print("HTTP Status:", response.status_code)
+    sha = hashlib.sha512(
+        sig_string.encode()
+    ).hexdigest()
 
-    data = response.json()
+    api_sig = rand + sha
 
-    print("API Status:", data.get("status"))
+    url = (
+        f"https://codeforces.com/api/{method}?"
+        f"{sorted_params}"
+        f"&apiSig={api_sig}"
+    )
 
-    if data.get("status") != "OK":
-        print(data)
-        return
-
-    submissions = data["result"]
-
-    print(f"Fetched {len(submissions)} submissions")
-
-    if submissions:
-        latest = submissions[0]
-        print(latest)
-        print("Submission ID:", latest["id"])
-
-        print("Problem:", latest["problem"]["name"])
-        print("Verdict:", latest.get("verdict"))
-        print("\nFIELDS:\n")
-
-        for key in latest.keys():
-            print(key)
+    return url
 
 
-if __name__ == "__main__":
-    get_submissions()
+url = build_signed_url()
+
+response = requests.get(url, timeout=30)
+
+print("HTTP:", response.status_code)
+
+data = response.json()
+
+print("STATUS:", data.get("status"))
+
+print(data)
