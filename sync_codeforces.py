@@ -39,38 +39,56 @@ def get_synced_submissions():
     return set(), None
 
 def generate_api_sig(method_name, params):
-    """Generates the secure SHA-512 cryptographic signature required by Codeforces API."""
     rand_prefix = "123456"
     ordered_params = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
     signature_string = f"{rand_prefix}/{method_name}?{ordered_params}#{CF_SECRET}"
     hashed = hashlib.sha512(signature_string.encode('utf-8')).hexdigest()
     return f"{rand_prefix}{hashed}"
 
-def get_cf_submissions():
-    """Queries Codeforces user status securely, scanning up to 5000 historic records."""
-    current_time = int(time.time())
-    params = {
-        "handle": CF_HANDLE,
-        "from": "1",
-        "count": "5000",  # Expanded from 100 to 5000 to catch full historic milestones
-        "includeSources": "true",
-        "apiKey": CF_KEY,
-        "time": str(current_time)
-    }
+def get_all_cf_submissions():
+    """Queries Codeforces user status using automated page iteration to capture all records."""
+    all_submissions = []
+    start_row = 1
+    batch_count = 500  # Pulling in stable page blocks
     
-    api_sig = generate_api_sig("user.status", params)
-    params["apiSig"] = api_sig
-    
-    url = "https://codeforces.com/api/user.status"
-    try:
-        response = requests.get(url, params=params).json()
-        if response["status"] != "OK":
-            print(f"Codeforces API rejected query: {response.get('comment')}")
-            return []
-        return response["result"]
-    except Exception as e:
-        print(f"Network error querying Codeforces API: {e}")
-        return []
+    while True:
+        print(f"Requesting submissions tracking rows {start_row} to {start_row + batch_count - 1}...")
+        current_time = int(time.time())
+        params = {
+            "handle": CF_HANDLE,
+            "from": str(start_row),
+            "count": str(batch_count),
+            "includeSources": "true",
+            "apiKey": CF_KEY,
+            "time": str(current_time)
+        }
+        
+        api_sig = generate_api_sig("user.status", params)
+        params["apiSig"] = api_sig
+        
+        url = "https://codeforces.com/api/user.status"
+        try:
+            response = requests.get(url, params=params).json()
+            if response["status"] != "OK":
+                print(f"Codeforces API tracking boundary reached or error occurred: {response.get('comment')}")
+                break
+                
+            result_list = response["result"]
+            if not result_list:
+                break
+                
+            all_submissions.extend(result_list)
+            # If we received less than the requested batch, we have reached the absolute end of history
+            if len(result_list) < batch_count:
+                break
+                
+            start_row += batch_count
+            time.sleep(1) # Polite gap to respect API rate boundaries
+        except Exception as e:
+            print(f"Network processing break: {e}")
+            break
+            
+    return all_submissions
 
 def write_to_github(repo_full_name, path, content, message, sha=None):
     url = f"https://api.github.com/repos/{repo_full_name}/contents/{path}"
@@ -107,7 +125,7 @@ def process_single_submission(sub, synced_ids):
     file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
     commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
     
-    print(f"Processing target push: {contest_id}{prob_index}...")
+    print(f"Syncing item to archive repository workspace: {contest_id}{prob_index}...")
     
     url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
     file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
@@ -117,14 +135,15 @@ def process_single_submission(sub, synced_ids):
     return success, sub_id
 
 def main():
-    print("Starting secure deep-scan synchronization processing engine...")
+    print("Starting secure exhaustive synchronization processing engine...")
     synced_ids, state_sha = get_synced_submissions()
-    submissions = get_cf_submissions()
+    submissions = get_all_cf_submissions()
     
     if not submissions:
         print("No authorization context or submission history resolved. System terminating safely.")
         return
 
+    print(f"Total submission footprint pulled: {len(submissions)} records. Checking for unique accepted entries...")
     new_synced_ids = list(synced_ids)
     uploaded_any = False
 
