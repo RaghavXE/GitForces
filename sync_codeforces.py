@@ -30,15 +30,12 @@ def get_submissions():
 
         print("Submission ID:", latest["id"])
 
-        print(
-            "Problem:",
-            latest["problem"].get("name")
-        )
+        print("Problem:", latest["problem"]["name"])
+        print("Verdict:", latest.get("verdict"))
+        print("\nFIELDS:\n")
 
-        print(
-            "Verdict:",
-            latest.get("verdict")
-        )
+        for key in latest.keys():
+            print(key)
 
 
 if __name__ == "__main__":
