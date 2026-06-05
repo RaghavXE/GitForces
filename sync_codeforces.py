@@ -6,7 +6,10 @@ CF_HANDLE = "raghavSoniXE"
 def get_submissions():
     url = (
         f"https://codeforces.com/api/user.status"
-        f"?handle={CF_HANDLE}&from=1&count=10"
+        f"?handle={CF_HANDLE}"
+        f"&from=1"
+        f"&count=1"
+        f"&includeSources=true"
     )
 
     response = requests.get(url, timeout=30)
@@ -27,7 +30,7 @@ def get_submissions():
 
     if submissions:
         latest = submissions[0]
-
+        print(latest)
         print("Submission ID:", latest["id"])
 
         print("Problem:", latest["problem"]["name"])
