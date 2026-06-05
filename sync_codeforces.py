@@ -7,13 +7,15 @@ import base64
 import requests
 
 CF_HANDLE = os.getenv("CF_HANDLE")
-
+GITHUB_USER = os.getenv("GH_USER")
 ENGINE_REPO = "GitForces"
 ARCHIVE_REPO = os.getenv("ARCHIVE_REPO")
-
 GH_PAT = os.getenv("GH_PAT")
 CF_KEY = os.getenv("CF_KEY")
 CF_SECRET = os.getenv("CF_SECRET")
+
+
+
 
 
 print("PAT EXISTS:", GH_PAT is not None)
@@ -49,7 +51,7 @@ r = requests.get(
 # print("GITFORCES:", r.status_code)
 # print(r.text)
 
-GITHUB_USER = os.getenv("GH_USER")
+
 
 r = requests.get(
     f"https://api.github.com/repos/{GITHUB_USER}/{ARCHIVE_REPO}",
