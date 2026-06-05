@@ -20,4 +20,8 @@ jobs:
         run: pip install requests
 
       - name: Run Script
+        env:
+          CF_KEY: ${{ secrets.CF_KEY }}
+          CF_SECRET: ${{ secrets.CF_SECRET }}
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: python sync_codeforces.py
