@@ -1,0 +1,27 @@
+name: Git-Forces Continuous Sync Engine
+
+on:
+  schedule:
+    - cron: '0 4 * * *' # Triggers at 04:00 UTC (9:30 AM IST) every single day automatically
+  workflow_dispatch: # Keeps a manual trigger button active for instant pushes
+
+jobs:
+  execute-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Codebase Extraction Setup
+        uses: actions/checkout@v4
+
+      - name: Deploy Python Environment Core
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Resolve Web Library Requirements
+        run: pip install requests
+
+      - name: Run Core Automation Script Execution Engine
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: python sync_codeforces.py
