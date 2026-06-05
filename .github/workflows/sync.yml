@@ -24,4 +24,6 @@ jobs:
       - name: Run Core Automation Script Execution Engine
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
+          CF_KEY: ${{ secrets.CF_KEY }}
+          CF_SECRET: ${{ secrets.CF_SECRET }}
         run: python sync_codeforces.py
