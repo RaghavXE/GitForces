@@ -78,25 +78,25 @@ def get_all_cf_submissions():
                 break
                 
             start_row += batch_count
-            time.sleep(0.5)
-        except Exception as e:
+        except Exception:
             break
             
     return all_submissions
 
 def fetch_raw_source_code(contest_id, submission_id):
-    """Fetches the actual raw source code text for a specific accepted submission."""
+    """Fetches submission data filtered precisely by your handle to avoid server timeouts."""
     current_time = int(time.time())
     params = {
         "contestId": str(contest_id),
+        "handle": CF_HANDLE,  # CRITICAL FILTER: Tells Codeforces to only return YOUR code
         "apiKey": CF_KEY,
         "time": str(current_time)
     }
-    # Using contest.status to extract the specific source payload row securely
-    api_sig = generate_api_sig("contest.status", params)
+    
+    api_sig = generate_api_sig("contest.submissions", params)
     params["apiSig"] = api_sig
     
-    url = "https://codeforces.com/api/contest.status"
+    url = "https://codeforces.com/api/contest.submissions"
     try:
         res = requests.get(url, params=params).json()
         if res["status"] == "OK":
@@ -142,34 +142,33 @@ def process_single_submission(sub, synced_ids):
     
     file_path = f"Codeforces/{contest_id}/{prob_index}_{prob_name}{ext}"
     
-    print(f"-> Extracting source code for accepted submission {sub_id}...")
+    print(f"-> Pulling source text for submission {sub_id}...")
     source_code = fetch_raw_source_code(contest_id, sub_id)
     
     if not source_code:
-        # Fallback: if contest.status doesn't yield it, skip to avoid blank files
+        print(f"   [Skip] Source text unavailable for ID {sub_id}")
         return False, None
 
     commit_msg = f"✨ Solved Codeforces {contest_id}{prob_index}: {prob_name}"
-    print(f"   Pushing to archive: {file_path}")
+    print(f"   Writing file to archive: {file_path}")
     
-    url = f"https://api.github.com/repos/{ARCHIVE_REPOSITORY_FULL}/contents/{file_path}" if 'ARCHIVE_REPOSITORY_FULL' in locals() else f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
+    url = f"https://api.github.com/repos/{ARCHIVE_REPO_FULL}/contents/{file_path}"
     file_check = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
     file_sha = file_check.json().get("sha") if file_check.status_code == 200 else None
     
     success = write_to_github(ARCHIVE_REPO_FULL, file_path, source_code, commit_msg, file_sha)
-    time.sleep(0.5) # Prevent aggressive API hitting
     return success, sub_id
 
 def main():
-    print("Starting secure exhaustive synchronization processing engine...")
+    print("Starting optimized targeted synchronization processing engine...")
     synced_ids, state_sha = get_synced_submissions()
     submissions = get_all_cf_submissions()
     
     if not submissions:
-        print("No authorization context or submission history resolved. System terminating safely.")
+        print("No submission history resolved. System terminating safely.")
         return
 
-    print(f"Total submission footprint pulled: {len(submissions)} records. Extracting solutions...")
+    print(f"Total submission footprint pulled: {len(submissions)} records. Filtering targets...")
     new_synced_ids = list(synced_ids)
     uploaded_any = False
 
