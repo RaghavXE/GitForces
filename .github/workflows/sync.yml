@@ -21,4 +21,7 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
           CF_KEY: ${{ secrets.CF_KEY }}
           CF_SECRET: ${{ secrets.CF_SECRET }}
+          CF_HANDLE: ${{ secrets.CF_HANDLE }}
+          GH_USER: ${{ secrets.GH_USER }}
+          ARCHIVE_REPO: ${{ secrets.ARCHIVE_REPO }}
         run: python sync_codeforces.py
