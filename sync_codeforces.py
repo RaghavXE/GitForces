@@ -174,10 +174,36 @@ def get_state():
     with open(STATE_FILE) as f:
         return json.load(f)
 
-
 def save_state(state):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=4)
+    url = (
+        f"https://api.github.com/repos/"
+        f"RaghavXE/{ENGINE_REPO}/contents/{STATE_FILE}"
+    )
+
+    current = requests.get(
+        url,
+        headers=HEADERS
+    ).json()
+
+    payload = {
+        "message": "Update sync state",
+        "content": base64.b64encode(
+            json.dumps(
+                state,
+                indent=4
+            ).encode()
+        ).decode(),
+        "sha": current["sha"]
+    }
+
+    r = requests.put(
+        url,
+        headers=HEADERS,
+        json=payload
+    )
+
+    print("STATE UPDATE:", r.status_code)
+
 
 
 def upload_file(path, content):
@@ -271,7 +297,6 @@ payload = {
         source.encode()
     ).decode()
 }
-
 r = requests.put(
     url,
     headers=HEADERS,
@@ -279,5 +304,15 @@ r = requests.put(
 )
 
 print("STATUS:", r.status_code)
-print(r.text)
 
+if r.status_code in [200, 201]:
+
+    state["next_index"] += 1
+
+    save_state(state)
+
+    print("Uploaded:", filename)
+
+else:
+
+    print(r.text)
