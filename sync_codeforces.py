@@ -105,7 +105,26 @@ def get_all_submissions():
 
         r = requests.get(url, timeout=30)
 
-        data = r.json()
+        # data = r.json()
+        for attempt in range(3):
+
+            try:
+                r = requests.get(url, timeout=30)
+                data = r.json()
+                break
+
+            except Exception:
+
+                print(
+                    f"Attempt {attempt+1} failed"
+                )
+
+                time.sleep(20)
+
+        else:
+            raise Exception(
+                "Codeforces API failed 3 times"
+            )
 
         if data["status"] != "OK":
             raise Exception(data)
